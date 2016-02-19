@@ -2,7 +2,7 @@
 local module = {}
 
 module.SSID = {}  
-
+module.SSID["WLAN SSID"] = "WLAN PASSWORD"
 
 
 module.HOST = "broker.mqttdashboard.com"  
