@@ -2,9 +2,7 @@
 local module = {}
 
 module.SSID = {}  
-module.SSID["waechter-netz"] = "wpprivat"
-module.SSID["SurfBox"] = "jhintern"
-module.SSID["HildemannT"] = "hildemannintern"
+
 
 
 module.HOST = "broker.mqttdashboard.com"  
