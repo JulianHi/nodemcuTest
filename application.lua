@@ -64,16 +64,53 @@ local function mqtt_start()
     m:connect(config.HOST, config.PORT, 0, 1, function(con) 
         register_myself()
         -- And then pings each 1000 milliseconds
-        tmr.stop(6)
+        --tmr.stop(6)
        -- tmr.alarm(6, 1000, 1, send_ping)
        send_registration()
     end) 
 
 end
 
+local function startRc() 
+	mod_rcswitch.start() 
+	-- Receiver on interrupt 0 => that is pin #2
+	mod_rcswitch.enableReceive(0);	
+	
+	-- And then pings each 500 milliseconds
+        tmr.stop(6)
+        tmr.alarm(6, 500, 1, rcTimer)
+		
+end
+
+local function rcTimer()
+
+	if mod_rcswitch.available() then
+	
+		value = mod_rcswitch.getReceivedValue()
+		
+		if value == 0 then
+			print("\nUnknown encoding")
+		else
+			print("\n====================================")
+			print("Received ")
+			print( mod_rcswitch.getReceivedValue() )
+			print(" / ")
+			print( mod_rcswitch.getReceivedBitlength() )
+			print("bit ")
+			print("Protocol: ")
+			println( mod_rcswitch.getReceivedProtocol() )
+			print("\n====================================")	
+		end	
+		
+		mod_rcswitch.resetAvailable();
+	end
+	
+end
+
 function module.start()
-	mod_relays.start()  
+	mod_relays.start() 
 	mqtt_start()
+	startRc()
 end
 
 return module 
