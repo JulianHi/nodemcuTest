@@ -71,16 +71,6 @@ local function mqtt_start()
 
 end
 
-local function startRc() 
-	mod_rcswitch.start() 
-	-- Receiver on interrupt 0 => that is pin #2
-	mod_rcswitch.enableReceive(0);	
-	
-	-- And then pings each 500 milliseconds
-        tmr.stop(6)
-        tmr.alarm(6, 500, 1, rcTimer)
-		
-end
 
 local function rcTimer()
 
@@ -105,6 +95,18 @@ local function rcTimer()
 		mod_rcswitch.resetAvailable();
 	end
 	
+end
+
+local function startRc() 
+	mod_rcswitch.start() 
+	-- Receiver on interrupt 0 => that is pin #2
+	mod_rcswitch.enableReceive(4)
+	
+	-- And then pings each 500 milliseconds
+        tmr.stop(6)
+        tmr.alarm(6, 1000, 1, rcTimer)	
+        --tmr.alarm(6, 1000, 1, rcTimer)
+		
 end
 
 function module.start()

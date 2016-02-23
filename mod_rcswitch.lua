@@ -1,141 +1,37 @@
 local module = {}  
 
-
-
---static const RCSwitch::Protocol PROGMEM proto[] = {
---    { 350, {  1, 31 }, {  1,  3 }, {  3,  1 } },    // protocol 1
---    { 650, {  1, 10 }, {  1,  2 }, {  2,  1 } },    // protocol 2
---    { 100, {  1, 71 }, {  4, 11 }, {  9,  6 } },    // protocol 3
---    { 380, {  1,  6 }, {  1,  3 }, {  3,  1 } },    // protocol 4
---    { 500, {  6, 14 }, {  1,  2 }, {  2,  1 } },    // protocol 5
- --};
-
- proto = {
-	 --    { 350, {  1, 31 }, {  1,  3 }, {  3,  1 } },    // protocol 1
-	 {pulseLength = 350, syncFactor = {high=1, low=31}, zero = {high=1, low=3}, one = {high=3, low=1}},
-	 --   { 650, {  1, 10 }, {  1,  2 }, {  2,  1 } },    // protocol 2
- 	 {pulseLength = 650, syncFactor = {high=1, low=10}, zero = {high=1, low=2}, one = {high=2, low=1}},
-	 --    { 100, {  1, 71 }, {  4, 11 }, {  9,  6 } },    // protocol 3
-  	 {pulseLength = 100, syncFactor = {high=1, low=71}, zero = {high=4, low=11}, one = {high=9, low=6}}
- }
-
-
-
-nTransmitterPin = -1
-nRepeatTransmit = 10
-protocol = 1
-nReceiverInterrupt = -1
-nReceiveTolerance = 60
+RCSWITCH_MAX_CHANGES = 104
 
 nReceivedValue = 0
-nReceivedBitlength=0
+nReceivedBitlength = 0
+nReceivedDelay = 0
+nReceivedProtocol = 0
 
+--[RCSWITCH_MAX_CHANGES];
+timings = {}
+--60 default
+nReceiveTolerance = 110
 
+--HANDLE VARs
+duration=0
+changeCount=0
+lastTime=0
+repeatCount=0
 
---MaxChanges
-RCSWITCH_MAX_CHANGES=67
--- timings array
-timings= {} 
-nSeparationLimit = 4600;
-
-
--- handeInterrupt
-duration=0;
-changeCount=0;
-lastTime=0;
-repeatCount=0;
-
-nReceivedValue=0;
-nReceivedBitlength=0;
-nReceivedDelay=0;
-nReceivedProtocol=0;
 
 local function rcswitch_start()
 	
-	for i=0,i<RCSWITCH_MAX_CHANGES, i=i+1 do
+	for i=1,(RCSWITCH_MAX_CHANGES+1) do
 		timings[i]=0
 	end
 	
-end
-
-local function enableReceive(pin)
-	nReceiverInterrupt= pin
-	
-	if nReceiverInterrupt != -1 then
-		nReceivedValue=0
-		nReceivedBitlength=0
-		
-		gpio.mode(nReceiverInterrupt,gpio.INT)
-		gpio.trig(nReceiverInterrupt, "both", handleInterrupt)
-	end
-	
-end
-
-local function handleInterrupt()
-	time = tmr.now()
-	duration = time -lastTime
-	
-	if duration > nSeparationLimit and diff(duration, timings[0]) < 200 then
-		repeatCount=repeatCount+1
-		changeCount=changeCount-1
-		
-		if repeatCount == 2 then
-			if receiveProtocol(1, changeCount) == false then
-			        if receiveProtocol(2, changeCount) == false then
-			        	if receiveProtocol(3, changeCount) == false then
-					  --failed
-				  	end
-				end
-			  end
-			  repeatCount = 0
-		end
-		changeCount = 0
-	elseif duration > nSeparationLimit then
-		changeCount = 0
-	end
-	
-	if changeCount >= RCSWITCH_MAX_CHANGES then
-		changeCount = 0
-		repeatCount =0
-	end
-	
-	timings[changeCount] = duration
-	changeCount = changeCount+1
-	lastTime = time	
-end
-
-local function receiveProtocol(p, changeCount)
- 	    pro = proto[p-1]
-
-	    code = 0;
-	    delay = timings[0] / pro.syncFactor.low;
-	    delayTolerance = delay * nReceiveTolerance / 100;
-
-	    for i = 1, i < changeCount, i = i + 2 do
-	        --code <<=1;
-		bit.lshift(code, 1)
-	        if (diff(timings[i], delay * pro.zero.high) < delayTolerance and
-	            diff(timings[i + 1], delay * pro.zero.low) < delayTolerance) then
-	            -- zero
-		elseif (diff(timings[i], delay * pro.one.high) < delayTolerance and
-	                   diff(timings[i + 1], delay * pro.one.low) < delayTolerance) then
-	            -- one
-	            --code |= 1;
-		    bit.bor(code, 1)
-	        else
-	            -- Failed
-	            return false;
-	    	end
-	end
-
-	    if changeCount > 6 then    -- ignore < 4bit values as there are no devices sending 4bit values => noise
-	        nReceivedValue = code;
-	        nReceivedBitlength = changeCount / 2;
-	        nReceivedDelay = delay;
-	        nReceivedProtocol = p;
-	    end
-
-	    return true;	
+ 	nReceiverInterrupt = -1
+	nTransmitterPin = -1
+	nReceivedValue = 0
+	nPulseLength = 350
+	nRepeatTransmit = 10
+	nReceiveTolerance = 60
+	nProtocol = 1
 end
 
 local function diff(A, B)
@@ -148,8 +44,270 @@ local function diff(A, B)
 	return C
 end
 
+
+local function receiveProtocol1(fchangeCount)
+
+	code = 0
+	delay = timings[1] / 31
+	delayTolerance = delay * nReceiveTolerance * 0.01
+
+	--for (unsigned int i = 1; i<changeCount ; i=i+2)
+	--fix fchangecount
+	fchangeCount = fchangeCount+1
+	for i = 2, fchangeCount, 2 do
+		
+--		va = timings[i]
+--		vb = delay-delayTolerance
+--		vc = delay+delayTolerance
+		
+--		print(va.." > ".. vb .. " < ".. vc)
+		
+--		vaa = timings[i+1]
+--		vbb = delay*3-delayTolerance
+--		vcc = delay*3+delayTolerance
+		
+--		print(vaa.." > ".. vbb .. " < ".. vcc)
+		
+		if (timings[i] > delay-delayTolerance and timings[i] < delay+delayTolerance and timings[i+1] > delay*3-delayTolerance and timings[i+1] < delay*3+delayTolerance) then
+			
+			--code = code << 1;
+			code = bit.lshift(code, 1)
+			-- print("pass 1")
+			
+			
+		elseif (timings[i] > delay*3-delayTolerance and timings[i] < delay*3+delayTolerance and timings[i+1] > delay-delayTolerance and timings[i+1] < delay+delayTolerance) then
+
+			code=code+1
+			--code = code << 1;
+			code = bit.lshift(code, 1)
+						-- print("pass 2")
+		else 
+			-- Failed
+			i = fchangeCount;
+			code = 0;
+						-- print("Fail 1")
+		end
+	end
+	
+	--code = code >> 1;
+	code = bit.rshift(code, 1)
+	
+	-- fix fchangeCount
+	fchangeCount=fchangeCount-1
+	if (fchangeCount >47) then 
+		if(code>0) then
+			nReceivedValue = code
+			nReceivedBitlength = fchangeCount / 2
+			nReceivedDelay = delay
+			nReceivedProtocol = 1
+		end
+	end
+
+	if (code == 0) then
+		return false
+	else
+		return true
+	end
+end
+
+local function receiveWT450( fchangeCount)
+
+	code = 0
+	HighWidth = 2000
+	LowWidth = 1000
+	delayTolerance = 300
+	bitLength=0
+
+	--for (int i = 1; i<changeCount ; i++) 
+	--fix table
+	 fchangeCount= fchangeCount+1
+	for i = 2, fchangeCount do 
+		
+		if (timings[i] > HighWidth-delayTolerance and timings[i] < HighWidth+delayTolerance ) then
+			code = bit.lshift(code, 1)
+			bitLength = bitLength+1
+						-- print("pass 11")
+		elseif ( timings[i] > LowWidth-delayTolerance and timings[i] < LowWidth+delayTolerance ) then
+			if ( timings[i+1] > LowWidth-delayTolerance and timings[i+1] < LowWidth+delayTolerance) then
+				code=code+1;
+				code = bit.lshift(code, 1)
+				i=i+1
+				bitLength = bitLength+1
+							-- print("pass 22")
+			else
+				-- Failed 
+				i = fchangeCount
+							-- print("fail 11")
+			end
+		else
+			-- Failed
+			i = fchangeCount
+			if (i<50) then	
+				code = 0
+			end
+		end
+
+	end
+		
+--	code = code >> 1;
+	code = bit.rshift(code, 1)
+	
+	--fix  fchangeCount
+	 fchangeCount =  fchangeCount-1
+	if ((fchangeCount > 50) and (bitLength==36)) then
+
+		print("JH - mod_rcswitch TODO FIXX line: 138")
+		-- there is no checksum of this unit, so using preamble and 2 fixed bits to check
+		-- Preamble= 1100 (first four bits)
+		--if( code & 0xC03000000ull)
+		--{
+		--	RCSwitch::nReceivedValue = code;
+		--		RCSwitch::nReceivedBitlength = bitLength;
+		--	RCSwitch::nReceivedDelay = 1000;
+		--	RCSwitch::nReceivedProtocol = 5;
+		--	return true;
+		--}
+		--else 
+			return false
+	else
+		return false
+	end
+end
+
+local function receiveLaCrosse(fchangeCount)
+	code = 0;
+    delay = timings[1] / 3
+	
+	--unsigned long delayTolerance = delay * RCSwitch::nReceiveTolerance * 0.01;    
+
+	HighWidth = 1500
+	LowWidth = 500
+	delayTolerance = 200
+
+	--for (int i = 1; i<changeCount ; i=i+2) 
+	--fix
+	fchangeCount=fchangeCount+1
+	
+	for i = 2, fchangeCount, 2 do 
+	
+		if (timings[i] > HighWidth-delayTolerance and timings[i] < HighWidth+delayTolerance)  then
+			--code = code << 1;
+			code = bit.lshift(code, 1)
+		elseif ( timings[i] > LowWidth-delayTolerance and timings[i] < LowWidth+delayTolerance ) then
+			code=code+1;
+			--code = code << 1;
+			code = bit.lshift(code, 1)
+		else
+			-- Failed
+			i = fchangeCount;
+			code = 0
+		end
+	end
+
+	--code = code >> 1;
+	code = bit.rshift(code, 1)
+	
+	--fix  fchangeCount
+	 fchangeCount =  fchangeCount-1
+	 
+	if (fchangeCount > 80) then
+		if (code>0) then
+			nReceivedValue = code
+			nReceivedBitlength = fchangeCount / 2
+			nReceivedDelay = 500
+			if (fchangeCount<100) then
+				nReceivedProtocol = 3
+			elseif (fchangeCount==104) then
+				nReceivedProtocol = 4
+			else
+				nReceivedProtocol = 0
+			end
+		end
+	end
+
+	if (code == 0) then
+		return false
+	else
+		return true
+	end
+	
+end
+
+local function handleInterrupt()
+	
+	--print("\ninterrupt")
+	
+	time = tmr.now()
+	duration = time -lastTime
+
+
+	if duration > 5000 and timings[1]>5000 then 
+		repeatCount = repeatCount+1
+
+		if repeatCount == 1 then
+			if changeCount>20 then
+				if changeCount>80 then
+					if receiveLaCrosse(changeCount) == false then
+						--failed
+						print("receiveLaCrosse failed")
+					end
+				elseif changeCount>50 then
+						if receiveWT450(changeCount) == false then
+							-- failed
+							print("receiveWT450 failed")
+						end
+				else 
+					changeCount = changeCount-1
+					if receiveProtocol1(changeCount) == false then
+						-- failed
+							--print("receiveProtocol1 failed"..changeCount)
+					end		
+				end
+			end
+			repeatCount = 0
+		end
+		changeCount = 0
+	elseif duration > 5000 then
+		changeCount = 0
+		repeatCount=0
+	end
+
+	if changeCount >= RCSWITCH_MAX_CHANGES then
+		changeCount = 0
+		repeatCount = 0
+	end
+	changeCount=changeCount+1
+	--print(changeCount)
+	timings[changeCount] = duration
+	lastTime = time
+	
+end
+
+
+function module.enableReceive(interrupt)
+	nReceiverInterrupt= pin
+	if nReceiverInterrupt == interrupt then
+		 return	-- prevent multiple creation of ISR. 31st May 2012 JP Liew
+	 end
+	
+	nReceiverInterrupt= interrupt
+		
+	if nReceiverInterrupt ~= -1 then
+		nReceivedValue = 0
+		nReceivedBitlength = 0
+			
+		gpio.mode(nReceiverInterrupt,gpio.INT)
+		gpio.trig(nReceiverInterrupt, "both", handleInterrupt)
+	end	
+end
+
+function module.disableReceive()
+	gipo.mode(nReceiverInterrupt, gpio.FLOAT)
+	nReceiverInterrupt = -1
+end
+
 function module.available()
-    return nReceivedValue != 0;
+    return nReceivedValue ~= 0
 end
 
 function module.getReceivedValue()
